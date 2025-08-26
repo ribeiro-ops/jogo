@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pac-Man Game</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: black;
+            margin: 0;
+        }
+
+        #game-container {
+            position: relative;
+            width: 800px; /* Tamanho do mapa */
+            height: 600px; /* Tamanho do mapa */
+            background-color: #222;
+            border: 2px solid #fff;
+            overflow: hidden;
+        }
+
+        #pacman {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background-color: yellow;
+            border-radius: 50%;
+            transition: transform 0.1s;
+        }
+
+        .point {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: red;
+            border-radius: 50%;
+        }
+
+        .enemy {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: blue;
+        }
+
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="pacman"></div>
+        <div id="score">Score: 0 | Level: 1</div>
+    </div>
+   <script>
+    const pacman = document.getElementById('pacman');
+    const container = document.getElementById('game-container');
+
+    let pacmanX = 0;
+    let pacmanY = 0;
+    let pacmanSize = 40;
+    let step = 5;
+    let moveInterval;
+    let targetAngle = null;
+
+    let points = [];
+    let enemies = [];
+    let pointCount = 20;
+    let score = 0;
+    let level = 1;
+    let enemyCount = 3;
+    let pacmanSpeed = 100; // em milissegundos
+
+    const CELL_SIZE = 40;
+    const cols = Math.floor(container.clientWidth / CELL_SIZE);
+    const rows = Math.floor(container.clientHeight / CELL_SIZE);
+
+    function updateScore() {
+        document.getElementById('score').innerText = `Score: ${score} | Level: ${level}`;
+    }
+
+    // Gera posições únicas para inimigos
+    let enemyPositions = [];
+
+    function createPoint() {
+        let x, y;
+        let collision;
+        do {
+            const col = Math.floor(Math.random() * cols);
+            const row = Math.floor(Math.random() * rows);
+            x = col * CELL_SIZE;
+            y = row * CELL_SIZE;
+            collision = enemyPositions.some(pos => pos.x === x && pos.y === y);
+        } while (collision);
+
+        const point = document.createElement('div');
+        point.classList.add('point');
+        point.style.transform = `translate(${x}px, ${y}px)`;
+        container.appendChild(point);
+        points.push(point);
+    }
+
+    function createEnemy(x, y) {
+        const enemy = document.createElement('div');
+        enemy.classList.add('enemy');
+        enemy.style.transform = `translate(${x}px, ${y}px)`;
+        container.appendChild(enemy);
+        enemies.push({ element: enemy, x, y, dx: 1, dy: 0 }); // Direção inicial
+        enemyPositions.push({ x, y });
+    }
+
+    function checkCollision(rect1, rect2) {
+        return !(
+            rect1.right < rect2.left ||
+            rect1.left > rect2.right ||
+            rect1.bottom < rect2.top ||
+            rect1.top > rect2.bottom
+        );
+    }
+
+    function movePacman() {
+        if (targetAngle !== null) {
+            pacmanX += Math.cos(targetAngle) * step;
+            pacmanY += Math.sin(targetAngle) * step;
+
+            pacmanX = Math.max(0, Math.min(container.clientWidth - pacmanSize, pacmanX));
+            pacmanY = Math.max(0, Math.min(container.clientHeight - pacmanSize, pacmanY));
+
+            pacman.style.transform = `translate(${pacmanX}px, ${pacmanY}px)`;
+
+            for (let i = points.length - 1; i >= 0; i--) {
+                const point = points[i];
+                if (checkCollision(pacman.getBoundingClientRect(), point.getBoundingClientRect())) {
+                    point.remove();
+                    points.splice(i, 1);
+                    pacmanSize += 5;
+                    pacman.style.width = `${pacmanSize}px`;
+                    pacman.style.height = `${pacmanSize}px`;
+                    score += 10;
+                    updateScore();
+                }
+            }
+
+            if (points.length === 0) {
+                levelUp();
+            }
+
+            enemies.forEach(enemy => {
+                if (checkCollision(pacman.getBoundingClientRect(), enemy.element.getBoundingClientRect())) {
+                    alert('Você perdeu!');
+                    setTimeout(() => {
+                        level = 1;
+                        pacmanSpeed = 100;
+                        resetGame();
+                    }, 1000);
+                }
+            });
+        }
+    }
+
+    function moveEnemies() {
+        enemies.forEach(enemy => {
+            // Move um passo aleatório
+            const direction = Math.floor(Math.random() * 4);
+            const dx = direction === 0 ? -CELL_SIZE : direction === 1 ? CELL_SIZE : 0;
+            const dy = direction === 2 ? -CELL_SIZE : direction === 3 ? CELL_SIZE : 0;
+
+            let newX = enemy.x + dx;
+            let newY = enemy.y + dy;
+
+            if (newX >= 0 && newX <= container.clientWidth - 20) {
+                enemy.x = newX;
+            }
+            if (newY >= 0 && newY <= container.clientHeight - 20) {
+                enemy.y = newY;
+            }
+
+            enemy.element.style.transform = `translate(${enemy.x}px, ${enemy.y}px)`;
+        });
+    }
+    setInterval(moveEnemies, 500);
+
+    function levelUp() {
+        level++;
+        pointCount += 10;
+        enemyCount++;
+        pacmanSpeed *= 0.98; // Aumenta a velocidade em 2%
+        resetGame();
+    }
+
+    function resetGame() {
+        clearInterval(moveInterval);
+
+        pacmanX = 0;
+        pacmanY = 0;
+        pacmanSize = 40;
+        step = 5;
+        pacman.style.width = `${pacmanSize}px`;
+        pacman.style.height = `${pacmanSize}px`;
+        pacman.style.transform = `translate(${pacmanX}px, ${pacmanY}px)`;
+
+        points.forEach(point => point.remove());
+        enemies.forEach(e => e.element.remove());
+        points = [];
+        enemies = [];
+        enemyPositions = [];
+
+        if (level === 1) score = 0;
+        updateScore();
+
+        for (let i = 0; i < pointCount; i++) {
+            createPoint();
+        }
+
+        for (let i = 0; i < enemyCount; i++) {
+            const col = Math.floor(Math.random() * cols);
+            const row = Math.floor(Math.random() * rows);
+            const x = col * CELL_SIZE;
+            const y = row * CELL_SIZE;
+            createEnemy(x, y);
+        }
+
+        moveInterval = setInterval(movePacman, pacmanSpeed);
+    }
+
+    function handleInput(event) {
+        const containerRect = container.getBoundingClientRect();
+        const touchX = (event.clientX || event.touches[0].clientX) - containerRect.left;
+        const touchY = (event.clientY || event.touches[0].clientY) - containerRect.top;
+
+        const deltaX = touchX - (pacmanX + pacmanSize / 2);
+        const deltaY = touchY - (pacmanY + pacmanSize / 2);
+        targetAngle = Math.atan2(deltaY, deltaX);
+
+        clearInterval(moveInterval);
+        moveInterval = setInterval(movePacman, pacmanSpeed);
+    }
+
+    container.addEventListener('click', handleInput);
+    container.addEventListener('touchstart', handleInput);
+
+    resetGame(); // inicia o jogo
+</script>
+
+</body>
+</html>
